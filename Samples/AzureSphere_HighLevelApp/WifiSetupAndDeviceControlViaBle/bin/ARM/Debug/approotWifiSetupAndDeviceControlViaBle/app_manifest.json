@@ -1,0 +1,1 @@
+{"SchemaVersion":1,"Name":"WifiSetupAndDeviceControlViaBle","ComponentId":"99f54421-c65f-4d5f-a93a-7f4ab3701055","EntryPoint":"/bin/app","CmdArgs":[],"Capabilities":{"Gpio":[8,9,10,12,13,28,26],"Uart":["ISU1"],"WifiConfig":true},"ApplicationType":"Default","TargetApplicationRuntimeVersion":2,"TargetBetaApis":"Beta1905"}
