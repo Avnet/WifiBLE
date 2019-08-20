@@ -71,7 +71,7 @@ typedef enum {
     MAGENTA,   /// RED=1, GREEN=0, BLUE=1
     YELLOW,    /// RED=1, GREEN=1, BLUE=0
     WHITE      /// RED=1, GREEN=1, BLUE=1
-    }LedColor;
+    } LedColor;
 
 typedef enum { 
     LED_OFF=0,    /// Do not display any LED
@@ -89,7 +89,7 @@ static int BlueLedGpioFd = -1;
 //jmf static int bleAdvertiseToBondedDevicesLedGpioFd = -1;
 //jmf static int bleAdvertiseToAllDevicesLedGpioFd = -1;
 //jmf static int bleConnectedLedGpioFd = -1;
-static int deviceControlLedGpioFd = -1;
+//jmf static int deviceControlLedGpioFd = -1;
 static int epollFd = -1;
 static int uartFd = -1;
 static int bleDeviceResetPinGpioFd = -1;
@@ -155,42 +155,21 @@ static void LedTimerEventHandler(EventData *eventData)
 {
     switch (LedTimer) {
         case LED_OFF:
-            Interval = 0;
             GPIO_SetValue(RedLedGpioFd,GPIO_Value_Low);
             GPIO_SetValue(BlueLedGpioFd,GPIO_Value_Low);
             GPIO_SetValue(GreenLedGpioFd,GPIO_Value_Low);
 	    break;
 
 	case LED_BSLOW:
-            if( Interval & 2) {
-                if( LedColor & 4 ) GPIO_SetValue(RedLedGpioFd,GPIO_Value_High);
-                if( LedColor & 2 ) GPIO_SetValue(GreenLedGpioFd,GPIO_Value_High);
-                if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd,GPIO_Value_High);
-                }
-             else {
-                if( LedColor & 4 ) GPIO_SetValue(RedLedGpioFd,GPIO_Value_Low);
-                if( LedColor & 2 ) GPIO_SetValue(GreenLedGpioFd,GPIO_Value_Low);
-                if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd,GPIO_Value_Low);
-                }
-            Interval++;
-            if( Interval > 3 ) 
-               Intervale = 0;
+            if( LedColor & 4 ) GPIO_SetValue(RedLedGpioFd, (Interval&2)? GPIO_Value_High:GPIO_Value_Low);
+            if( LedColor & 2 ) GPIO_SetValue(GreenLedGpioFd, (Interval&2)? GPIO_Value_High:GPIO_Value_Low);
+            if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd, (Interval&2)? GPIO_Value_High:GPIO_Value_Low);
 	    break;
 
 	case LED_BFAST:
-            if( Interval & 1) {
-                if( LedColor & 4 ) GPIO_SetValue(RedLedGpioFd,GPIO_Value_High);
-                if( LedColor & 2 ) GPIO_SetValue(GreenLedGpioFd,GPIO_Value_High);
-                if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd,GPIO_Value_High);
-                }
-             else {
-                if( LedColor & 4 ) GPIO_SetValue(RedLedGpioFd,GPIO_Value_Low);
-                if( LedColor & 2 ) GPIO_SetValue(GreenLedGpioFd,GPIO_Value_Low);
-                if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd,GPIO_Value_Low);
-                }
-            Interval++;
-            if( Interval > 3 ) 
-               Intervale = 0;
+            if( LedColor & 4 ) GPIO_SetValue(RedLedGpioFd,(Interval&1)? GPIO_Value_High:GPIO_Value_Low);
+            if( LedColor & 2 ) GPIO_SetValue(GreenLedGpioFd,(Interval&1)? GPIO_Value_High:GPIO_Value_Low);
+            if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd,(Interval&1)? GPIO_Value_High:GPIO_Value_Low);
 	    break;
 
 	case LED_ON:
@@ -199,6 +178,9 @@ static void LedTimerEventHandler(EventData *eventData)
             if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd,GPIO_Value_High);
 	    break;
         }
+    Interval++;
+    if( Interval > 3 ) 
+        Intervale = 0;
 }
 
 
@@ -257,42 +239,34 @@ static void TerminationHandler(int signalNumber)
 static void UpdateBleLedStatus(BleControlMessageProtocolState state)
 {
     switch (state) {
-        case BleControlMessageProtocolState_Uninitialized:
-//    Yellow/constant on - Uninitialized;
+        case BleControlMessageProtocolState_Uninitialized:            /// Yellow/constant on - Uninitialized;
         set_ledcolor(YELLOW); 
         set_ledblink(LED_ON);
         break;
 
-        case BleControlMessageProtocolState_AdvertiseToBondedDevices:
-//    Blue/slow-blink    - Advertising to bonded devices only;
+        case BleControlMessageProtocolState_AdvertiseToBondedDevices: /// Blue/slow-blink - Advertising to bonded devices only;
         set_ledcolor(BLUE); 
         set_ledblink(LED_BSLOW);
         break;
 
-        case BleControlMessageProtocolState_AdvertisingToAllDevices:
-//    Red/slow-blink     - Advertising to all devices;
+        case BleControlMessageProtocolState_AdvertisingToAllDevices:  /// Red/slow-blink - Advertising to all devices;
         set_ledcolor(RED); 
         set_ledblink(LED_BSLOW);
         break;
 
-        case BleControlMessageProtocolState_DeviceConnected:
-//    Green/slow-blink   - Connected to a BLE device;
+        case BleControlMessageProtocolState_DeviceConnected:          /// Green/slow-blink - Connected to a BLE device;
         set_ledcolor(GREEN); 
         set_ledblink(LED_BSLOW);
         break;
 
-        case BleControlMessageProtocolState_Error:
-//    Magenta/fast-blink - Error
+        case BleControlMessageProtocolState_Error:                    /// Magenta/fast-blink - Error
         set_ledcolor(MAGENTA); 
         set_ledblink(LED_BFAST);
         break;
 
-        case BleControlMessageProtocolState_UserLedOn:
-//    White/constant on  - User LED on (locally initiated)
-//    White/slow-blink   - User LED on (remote initiated)
-        set_ledcolor(WHITE); 
+        case BleControlMessageProtocolState_UserLedOn:                /// White/constant on - User LED on (locally initiated) 
+        set_ledcolor(WHITE);                                          /// White/slow-blink  - User LED on (remote initiated)
         break;
-
         }
 }
 
