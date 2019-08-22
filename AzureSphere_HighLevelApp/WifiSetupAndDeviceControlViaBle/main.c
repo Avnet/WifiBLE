@@ -8,10 +8,10 @@
 // running on a Nordic nRF52 Bluetooth LE board, allowing Wi-Fi configuration and LED control on the
 // Azure Sphere via Bluetooth LE.
 //
-// Pressing SK_BUTTON_A briefly will start allowing new BLE bonds for 1 minute.
-// Holding SK_BUTTON_A for > 3 seconds will delete all BLE bonds.
+// Pressing SAMPLE_BUTTON_1 briefly will start allowing new BLE bonds for 1 minute.
+// Holding SAMPLE_BUTTON_1 for > 3 seconds will delete all BLE bonds.
 // Pressing SKMPLE_BUTTON_B briefly will toggle SAMPLE_LED.
-// Holding SK_BUTTON_B will forget all stored Wi-Fi networks on Azure Sphere.
+// Holding SAMPLE_BUTTON_2 will forget all stored Wi-Fi networks on Azure Sphere.
 // SK_USRLED (which is an tri-colored RGB LED) will illuminat/flash a color to indicates the BLE status:
 //    Yellow/constant on - Uninitialized;
 //    Blue/slow-blink    - Advertising to bonded devices only;
@@ -63,22 +63,15 @@
 // Magenta - Error
 //
 typedef enum {
-    BLACK=0,   /// RED=0, GREEN=0, BLUE=0
-    BLUE,      /// RED=0, GREEN=0, BLUE=1
-    GREEN,     /// RED=0, GREEN=1, BLUE=0
-    CYAN,      /// RED=0, GREEN=1, BLUE=1
-    RED,       /// RED=1, GREEN=0, BLUE=0
-    MAGENTA,   /// RED=1, GREEN=0, BLUE=1
-    YELLOW,    /// RED=1, GREEN=1, BLUE=0
-    WHITE      /// RED=1, GREEN=1, BLUE=1
-    } LedColor;
-
-typedef enum { 
-    LED_OFF=0,    /// Do not display any LED
-    LED_BSLOW,    /// Blink the LED slowly (1 second period)
-    LED_BFAST,    /// Blink the LED fast   (1/2 second period)
-    LED_ON        /// LED ON
-    } LedFlash;
+    BLACK=0,   /// (0) RED=0, GREEN=0, BLUE=0
+    BLUE,      /// (1) RED=0, GREEN=0, BLUE=1
+    RED,       /// (2) RED=0, GREEN=1, BLUE=0
+    CYAN,      /// (3) RED=0, GREEN=1, BLUE=1
+    GREEN,     /// (4) RED=1, GREEN=0, BLUE=0
+    MAGENTA,   /// (5) RED=1, GREEN=0, BLUE=1
+    YELLOW,    /// (6) RED=1, GREEN=1, BLUE=0
+    WHITE      /// (7) RED=1, GREEN=1, BLUE=1
+    } LedColor_type;
 
 // File descriptors - initialized to invalid value
 static int buttonTimerFd = -1;
@@ -86,15 +79,10 @@ static int ledTimerFd = -1;
 static int RedLedGpioFd = -1;
 static int GreenLedGpioFd = -1;
 static int BlueLedGpioFd = -1;
-//jmf static int bleAdvertiseToBondedDevicesLedGpioFd = -1;
-//jmf static int bleAdvertiseToAllDevicesLedGpioFd = -1;
-//jmf static int bleConnectedLedGpioFd = -1;
-//jmf static int deviceControlLedGpioFd = -1;
 static int epollFd = -1;
 static int uartFd = -1;
 static int bleDeviceResetPinGpioFd = -1;
 static struct timespec bleAdvertiseToAllTimeoutPeriod = {60u, 0};
-static GPIO_Value_Type deviceControlLedState = GPIO_Value_High;
 
 /// <summary>
 ///     Button events.
@@ -124,27 +112,38 @@ static ButtonState button_A_State = {.fd = -1, .isPressed = false, .isHeld = fal
 static ButtonState button_B_State = {.fd = -1, .isPressed = false, .isHeld = false};
 
 // LED-related variables
-static LedColor LedColor = BLACK;
-static LedFlash LedTimer = LED_OFF;
-static int Interval;
+static     LedColor_type UserLedColor = BLACK, StatusLedColor = BLACK;
+static int UpdateUserLed=0;
+
+// Termination state
+static volatile sig_atomic_t terminationRequired = false;
 
 /// <summary>
-///     Set the blink rate of the RGB LED
+///     Signal handler for termination requests. This handler must be async-signal-safe.
 /// </summary>
-/// <param name="LedFlash">Enumerated flash period.</param>
-void set_ledblink(LedFlash t)
+static void TerminationHandler(int signalNumber)
 {
-    Interval = 0;
-    LedTimer = t;
+    // Don't use Log_Debug here, as it is not guaranteed to be async-signal-safe.
+    terminationRequired = true;
 }
 
 /// <summary>
-///     Set the RGB LED color
+///     Set the user RGB LED color
 /// </summary>
-/// <param name="LedColor">Enumerated LED color.</param>
-void set_ledcolor(LedColor c) 
+/// <param name="StatusLedColor">Enumerated LED color.</param>
+void set_userledcolor(LedColor_type c) 
 {
-    LedColor = c;
+    UserLedColor = c;
+}
+
+/// <summary>
+///     Set the status RGB LED color
+/// </summary>
+/// <param name="StatusLedColor">Enumerated LED color.</param>
+void set_statusledcolor(LedColor_type c) 
+{
+    Log_Debug("INFO: set_statusLedcolor called with color=%d\n", c);
+    StatusLedColor = c;
 }
 
 /// <summary>
@@ -153,34 +152,16 @@ void set_ledcolor(LedColor c)
 /// <param name="eventData">Context data for handled event.</param>
 static void LedTimerEventHandler(EventData *eventData)
 {
-    switch (LedTimer) {
-        case LED_OFF:
-            GPIO_SetValue(RedLedGpioFd,GPIO_Value_Low);
-            GPIO_SetValue(BlueLedGpioFd,GPIO_Value_Low);
-            GPIO_SetValue(GreenLedGpioFd,GPIO_Value_Low);
-	    break;
-
-	case LED_BSLOW:
-            if( LedColor & 4 ) GPIO_SetValue(RedLedGpioFd, (Interval&2)? GPIO_Value_High:GPIO_Value_Low);
-            if( LedColor & 2 ) GPIO_SetValue(GreenLedGpioFd, (Interval&2)? GPIO_Value_High:GPIO_Value_Low);
-            if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd, (Interval&2)? GPIO_Value_High:GPIO_Value_Low);
-	    break;
-
-	case LED_BFAST:
-            if( LedColor & 4 ) GPIO_SetValue(RedLedGpioFd,(Interval&1)? GPIO_Value_High:GPIO_Value_Low);
-            if( LedColor & 2 ) GPIO_SetValue(GreenLedGpioFd,(Interval&1)? GPIO_Value_High:GPIO_Value_Low);
-            if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd,(Interval&1)? GPIO_Value_High:GPIO_Value_Low);
-	    break;
-
-	case LED_ON:
-            if( LedColor & 4 ) GPIO_SetValue(RedLedGpioFd,GPIO_Value_High);
-            if( LedColor & 2 ) GPIO_SetValue(GreenLedGpioFd,GPIO_Value_High);
-            if( LedColor & 1 ) GPIO_SetValue(BlueLedGpioFd,GPIO_Value_High);
-	    break;
+    LedColor_type LedColor = (UpdateUserLed) ? UserLedColor : StatusLedColor;
+    if (ConsumeTimerFdEvent(ledTimerFd) != 0) {
+        terminationRequired = true;
+        return;
         }
-    Interval++;
-    if( Interval > 3 ) 
-        Intervale = 0;
+
+    UpdateUserLed = !UpdateUserLed;
+    GPIO_SetValue(RedLedGpioFd, (LedColor&4)?GPIO_Value_Low:GPIO_Value_High);
+    GPIO_SetValue(GreenLedGpioFd,(LedColor&2)?GPIO_Value_Low:GPIO_Value_High);
+    GPIO_SetValue(BlueLedGpioFd,(LedColor&1)?GPIO_Value_Low:GPIO_Value_High);
 }
 
 
@@ -224,48 +205,35 @@ ButtonEvent GetButtonEvent(ButtonState *state)
     return event;
 }
 
-// Termination state
-static volatile sig_atomic_t terminationRequired = false;
-
-/// <summary>
-///     Signal handler for termination requests. This handler must be async-signal-safe.
-/// </summary>
-static void TerminationHandler(int signalNumber)
-{
-    // Don't use Log_Debug here, as it is not guaranteed to be async-signal-safe.
-    terminationRequired = true;
-}
 
 static void UpdateBleLedStatus(BleControlMessageProtocolState state)
 {
+
+    Log_Debug("INFO: UpdateBleLedStatus called with state=%d\n",state);
+
     switch (state) {
-        case BleControlMessageProtocolState_Uninitialized:            /// Yellow/constant on - Uninitialized;
-        set_ledcolor(YELLOW); 
-        set_ledblink(LED_ON);
+        case BleControlMessageProtocolState_Uninitialized:            /// Yellow - Uninitialized;
+        set_statusledcolor(YELLOW); 
         break;
 
-        case BleControlMessageProtocolState_AdvertiseToBondedDevices: /// Blue/slow-blink - Advertising to bonded devices only;
-        set_ledcolor(BLUE); 
-        set_ledblink(LED_BSLOW);
+        case BleControlMessageProtocolState_AdvertiseToBondedDevices: /// Blue - Advertising to bonded devices only;
+        set_statusledcolor(BLUE); 
         break;
 
-        case BleControlMessageProtocolState_AdvertisingToAllDevices:  /// Red/slow-blink - Advertising to all devices;
-        set_ledcolor(RED); 
-        set_ledblink(LED_BSLOW);
+        case BleControlMessageProtocolState_AdvertisingToAllDevices:  /// Red - Advertising to all devices;
+        set_statusledcolor(RED); 
         break;
 
-        case BleControlMessageProtocolState_DeviceConnected:          /// Green/slow-blink - Connected to a BLE device;
-        set_ledcolor(GREEN); 
-        set_ledblink(LED_BSLOW);
+        case BleControlMessageProtocolState_DeviceConnected:          /// Green - Connected to a BLE device;
+        set_statusledcolor(GREEN); 
         break;
 
-        case BleControlMessageProtocolState_Error:                    /// Magenta/fast-blink - Error
-        set_ledcolor(MAGENTA); 
-        set_ledblink(LED_BFAST);
+        case BleControlMessageProtocolState_Error:                    /// Magenta - Error
+        set_statusledcolor(MAGENTA); 
         break;
 
-        case BleControlMessageProtocolState_UserLedOn:                /// White/constant on - User LED on (locally initiated) 
-        set_ledcolor(WHITE);                                          /// White/slow-blink  - User LED on (remote initiated)
+        case BleControlMessageProtocolState_UserLedOn:                /// White - User LED on (locally initiated) 
+        set_userledcolor(WHITE);                                    
         break;
         }
 }
@@ -280,33 +248,27 @@ static void BleStateChangeHandler(BleControlMessageProtocolState state)
     switch (state) {
     case BleControlMessageProtocolState_Error:
         Log_Debug("INFO: BLE device is in an error state, resetting it...\n");
-        set_ledcolor(MAGENTA); 
-        set_ledblink(LED_BFAST);
+        set_statusledcolor(MAGENTA); 
         break;
     case BleControlMessageProtocolState_AdvertiseToBondedDevices:
         Log_Debug("INFO: BLE device is advertising to bonded devices only.\n");
-        set_ledcolor(BLUE); 
-        set_ledblink(LED_BSLOW);
+        set_statusledcolor(BLUE); 
         break;
     case BleControlMessageProtocolState_AdvertisingToAllDevices:
         Log_Debug("INFO: BLE device is advertising to all devices.\n");
-        set_ledcolor(RED); 
-        set_ledblink(LED_BSLOW);
+        set_statusledcolor(RED); 
         break;
     case BleControlMessageProtocolState_DeviceConnected:
         Log_Debug("INFO: BLE device is now connected to a central device.\n");
-        set_ledcolor(GREEN); 
-        set_ledblink(LED_BSLOW);
+        set_statusledcolor(GREEN); 
         break;
     case BleControlMessageProtocolState_Uninitialized:
         Log_Debug("INFO: BLE device is now being initialized.\n");
-        set_ledcolor(YELLOW); 
-        set_ledblink(LED_ON);
+        set_statusledcolor(YELLOW); 
         break;
     case BleControlMessageProtocolState_UserLedOn:
         Log_Debug("INFO: BLE device turn on LED.\n");
-        set_ledcolor(WHITE); 
-        set_ledblink(LED_BSLOW);
+        set_userledcolor(WHITE); 
         break;
     default:
         Log_Debug("ERROR: Unsupported BLE state: %d.\n", state);
@@ -320,8 +282,7 @@ static void BleStateChangeHandler(BleControlMessageProtocolState state)
 /// <param name="state">The LED status to be set.</param>
 static void SetDeviceControlLedStatusHandler(bool isOn)
 {
-    set_ledcolor(WHITE); 
-    set_ledblink(isOn? LED_ON:LED_OFF);
+    set_userledcolor(isOn? WHITE:BLACK); 
 }
 
 /// <summary>
@@ -330,7 +291,7 @@ static void SetDeviceControlLedStatusHandler(bool isOn)
 /// <returns>The status of Device Control LED.</returns>
 static bool GetDeviceControlLedStatusHandler(void)
 {
-    return (LedColor == WHITE && LedTimer != LED_OFF);
+    return (UserLedColor == WHITE);
 }
 
 /// <summary>
@@ -350,12 +311,14 @@ static void ButtonTimerEventHandler(EventData *eventData)
         terminationRequired = true;
         return;
     } else if (button_A_Event == ButtonEvent_Released) {
-        Log_Debug("INFO: SK_BUTTON_A was pressed briefly, allowing new BLE bonds...\n");
+        Log_Debug("INFO: SAMPLE_BUTTON_1 was pressed briefly, allowing new BLE bonds...\n");
         if (BleControlMessageProtocol_AllowNewBleBond(&bleAdvertiseToAllTimeoutPeriod) != 0) {
             Log_Debug("ERROR: Unable to allow new BLE bonds, check nRF52 is connected.\n");
+            set_statusledcolor(RED);
+            terminationRequired = true;
         }
     } else if (button_A_Event == ButtonEvent_Held) {
-        Log_Debug("INFO: SK_BUTTON_A is held; deleting all BLE bonds...\n");
+        Log_Debug("INFO: SAMPLE_BUTTON_1 is held; deleting all BLE bonds...\n");
         if (BleControlMessageProtocol_DeleteAllBondedDevices() != 0) {
             Log_Debug("ERROR: Unable to delete all BLE bonds, check nRF52 is connected.\n");
         } else {
@@ -364,18 +327,18 @@ static void ButtonTimerEventHandler(EventData *eventData)
     }
     // No actions are defined for other events.
 
-    // Take actions based on SK_BUTTON_B events.
+    // Take actions based on SAMPLE_BUTTON_2 events.
     ButtonEvent button_B_Event = GetButtonEvent(&button_B_State);
     if (button_B_Event == ButtonEvent_Error) {
         terminationRequired = true;
         return;
     } else if (button_B_Event == ButtonEvent_Released) {
-        Log_Debug("INFO: SK_BUTTON_B was pressed briefly; toggling SAMPLE_LED.\n");
+        Log_Debug("INFO: SAMPLE_BUTTON_2 was pressed briefly; toggling SAMPLE_LED.\n");
         SetDeviceControlLedStatusHandler( !GetDeviceControlLedStatusHandler() );
         DeviceControlMessageProtocol_NotifyLedStatusChange();
     } else if (button_B_Event == ButtonEvent_Held) {
         // Forget all stored Wi-Fi networks
-        Log_Debug("INFO: SK_BUTTON_B is held; forgetting all stored Wi-Fi networks...\n");
+        Log_Debug("INFO: SAMPLE_BUTTON_2 is held; forgetting all stored Wi-Fi networks...\n");
         if (WifiConfig_ForgetAllNetworks() != 0) {
             Log_Debug("ERROR: Unable to forget all stored Wi-Fi networks: %s (%d).\n",
                       strerror(errno), errno);
@@ -397,9 +360,9 @@ static EventData ledEventData = {.eventHandler = &LedTimerEventHandler};
 static int InitPeripheralsAndHandlers(void)
 {
     // Open the GPIO controlling the nRF52 reset pin, and keep it held in reset (low) until needed.
-    bleDeviceResetPinGpioFd = GPIO_OpenAsOutput(SAMPLE_NRF52_RESET, GPIO_OutputMode_OpenDrain, GPIO_Value_Low);
+    bleDeviceResetPinGpioFd = GPIO_OpenAsOutput(SAMPLE_NRF52_RESET, GPIO_OutputMode_OpenDrain, GPIO_Value_Low); //jmf
     if (bleDeviceResetPinGpioFd < 0) {
-        Log_Debug("ERROR: Could not open GPIO 5 as reset pin: %s (%d).\n", strerror(errno), errno);
+        Log_Debug("ERROR: Could not open SAMPLE_NRF52_RESET as reset pin: %s (%d).\n", strerror(errno), errno);
         return -1;
     }
 
@@ -417,8 +380,8 @@ static int InitPeripheralsAndHandlers(void)
     UART_Config uartConfig;
     UART_InitConfig(&uartConfig);
     uartConfig.baudRate = 115200;
-    uartConfig.flowControl = UART_FlowControl_RTSCTS;
-    uartFd = UART_Open(SAMPLE_NRF52_UART, &uartConfig);
+    uartConfig.flowControl = UART_FlowControl_None;
+    uartFd = UART_Open(SAMPLE_UART, &uartConfig);
     if (uartFd < 0) {
         Log_Debug("ERROR: Could not open UART: %s (%d).\n", strerror(errno), errno);
         return -1;
@@ -431,17 +394,17 @@ static int InitPeripheralsAndHandlers(void)
     WifiConfigMessageProtocol_Init();
     DeviceControlMessageProtocol_Init(SetDeviceControlLedStatusHandler,GetDeviceControlLedStatusHandler);
 
-    Log_Debug("Opening SK_BUTTON_A as input\n");
-    button_A_State.fd = GPIO_OpenAsInput(SK_BUTTON_A);
+    Log_Debug("Opening BUTTON_A as input\n");
+    button_A_State.fd = GPIO_OpenAsInput(SAMPLE_BUTTON_1);
     if (button_A_State.fd < 0) {
-        Log_Debug("ERROR: Could not open SK_BUTTON_A GPIO: %s (%d).\n", strerror(errno), errno);
+        Log_Debug("ERROR: Could not open BUTTON_A GPIO: %s (%d).\n", strerror(errno), errno);
         return -1;
     }
 
-    Log_Debug("Opening SK_BUTTON_B as input.\n");
-    button_B_State.fd = GPIO_OpenAsInput(SK_BUTTON_B);
+    Log_Debug("Opening BUTTON_B as input.\n");
+    button_B_State.fd = GPIO_OpenAsInput(SAMPLE_BUTTON_2);
     if (button_B_State.fd < 0) {
-        Log_Debug("ERROR: Could not open SK_BUTTON_B GPIO: %s (%d).\n", strerror(errno), errno);
+        Log_Debug("ERROR: Could not open BUTTON_B GPIO: %s (%d).\n", strerror(errno), errno);
         return -1;
     }
 
@@ -478,14 +441,11 @@ static int InitPeripheralsAndHandlers(void)
         return -1;
     }
 
-    set_ledblink(LED_OFF);
-    set_ledcolor(BLACK);
-
-    struct timespec ledServicePeriod = {0, 500000};
+    struct timespec ledServicePeriod = {0, 200000000};
     ledTimerFd = CreateTimerFdAndAddToEpoll(epollFd, &ledServicePeriod, &ledEventData, EPOLLIN);
     if (ledTimerFd < 0) {
         return -1;
-    }
+        }
 
     UpdateBleLedStatus(BleControlMessageProtocolState_Uninitialized);
 
@@ -535,16 +495,19 @@ int main(int argc, char *argv[])
     Log_Debug("INFO: BLE Wi-Fi application starting.\n");
     Log_Debug(
         "Available actions on the Azure Sphere device:\n"
-        "\tPress SK_BUTTON_A  - Start allowing new BLE bonds for 1 minute\n"
-        "\tHold SK_BUTTON_A   - Delete all BLE bonds\n"
-        "\tPress SK_BUTTON_B  - Toggle SAMPLE_LED\n"
-        "\tHold SK_BUTTON_B   - Forget all stored Wi-Fi networks on Azure Sphere device\n\n"
-        "SAMPLE_RGBLED's color indicates BLE status for the attached nRF52 board:\n"
+        "\tPress BUTTON_A  - Start allowing new BLE bonds for 1 minute\n"
+        "\tHold BUTTON_A   - Delete all BLE bonds\n"
+        "\tPress BUTTON_B  - Toggle SAMPLE_LED\n"
+        "\tHold BUTTON_B   - Forget all stored Wi-Fi networks on Azure Sphere device\n\n"
+        "SAMPLE_RGBLED's color indicates BLE status for the attached nRF52 board.  It toggles between:\n"
+        "a status LED setting and a user LED setting.  The vlaues are:\n"
         "\tYellow  - Uninitialized\n"
         "\tBlue    - Advertising to bonded devices only\n"
         "\tRed     - Advertising to all devices\n"
         "\tGreen   - Connected to a central device\n"
-        "\tMagenta - Error\n\n");
+        "\tMagenta - Error\n\n"
+        "\tWhite or OFF - represents the USER LED.\n\n");
+
     if (InitPeripheralsAndHandlers() != 0) {
         terminationRequired = true;
     }

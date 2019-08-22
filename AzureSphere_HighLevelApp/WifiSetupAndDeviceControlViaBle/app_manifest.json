@@ -9,13 +9,11 @@
       "$SAMPLE_RGBLED_RED",
       "$SAMPLE_RGBLED_GREEN",
       "$SAMPLE_RGBLED_BLUE",
-
       "$SAMPLE_BUTTON_1",
       "$SAMPLE_BUTTON_2",
-      "$SAMPLE_NRF52_RESET",
-      "$SAMPLE_NRF52_DFU"
+      "$SAMPLE_NRF52_RESET"
     ],
-    "Uart": [ "$SAMPLE_NRF52_UART" ],
+    "Uart": [ "$SAMPLE_UART" ],
     "WifiConfig": true
   },
   "ApplicationType": "Default"
