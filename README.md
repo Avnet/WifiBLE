@@ -48,6 +48,6 @@ See: [Schematic](http://cloudconnectkits.org/sites/default/files/AES-MS-MT3620-S
 
 NOTE: Not all the connections present in the Microsoft Sample code are needed. 
 
-With the exception of the above, operation is the same as described in the READ.me located [here](https://github.com/Azure/azure-sphere-samples/tree/master/Samples/WifiSetupAndDeviceControlViaBle)).
+With the exception of the above, operation is the same as described in the READ.me located [here](https://github.com/Azure/azure-sphere-samples/tree/master/Samples/WifiSetupAndDeviceControlViaBle).
 
 
