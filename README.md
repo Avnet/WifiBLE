@@ -19,6 +19,7 @@ After the environment is established, clone this repository locally:
 This solution utilizes a Nordic nRF52 Development Kit similar to the original Microsoft Sample along with a Windows 10 App to illustrate the companion user experience.
 
 Overall, the sample code operation is the same as described in the [Microsoft Sample](https://github.com/Azure/azure-sphere-samples/tree/master/Samples/WifiSetupAndDeviceControlViaBle) but the LED operation is different.  For the Avnet Starter Kit it there is a single tri-colored LED which flashes at a half second interval between Status and User LED values:
+
 | LED | Description |
 |------|------------|
 |Yellow| Uninitialized |
