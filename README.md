@@ -36,7 +36,8 @@ Jumpers run from the Avnet Azure Sphere MT3620 Starter Kit to the nRF52 board us
 * GPI28_MISC0_RX0_DATA0
 * GPIO26_SCLK0_TX0
 * GND
-See: [Schematic]([http://cloudconnectkits.org/sites/default/files/AES-MS-MT3620-SK-G_SCH_2019-03-06.PDF](http://cloudconnectkits.org/sites/default/files/AES-MS-MT3620-SK-G_SCH_2019-03-06.PDF))
+
+See: [Schematic](http://cloudconnectkits.org/sites/default/files/AES-MS-MT3620-SK-G_SCH_2019-03-06.PDF)
 
 |NRF52 Board | Mikroe Proto click |
 |------------|--------------------|
