@@ -23,7 +23,7 @@
         {"Name": "SAMPLE_RGBLED_RED",     "Type": "Gpio",      "Mapping": "AVNET_MT3620_SK_USER_LED_RED",  "Comment": "MT3620 SK: User LED RED Channel."},
         {"Name": "SAMPLE_RGBLED_GREEN",   "Type": "Gpio",      "Mapping": "AVNET_MT3620_SK_USER_LED_GREEN","Comment": "MT3620 SK: User LED GREEN Channel."},
         {"Name": "SAMPLE_RGBLED_BLUE",    "Type": "Gpio",      "Mapping": "AVNET_MT3620_SK_USER_LED_BLUE", "Comment": "MT3620 SK: User LED BLUE Channel."},
-        {"Name": "SAMPLE_NRF52_RESET",    "Type": "Gpio",      "Mapping": "AVNET_MT3620_SK_GPIO28",        "Comment": "MT3620 SK: Connect external reset signal using SOCKET1: RX."},
+        {"Name": "SAMPLE_NRF52_RESET",    "Type": "Gpio",      "Mapping": "AVNET_MT3620_SK_GPIO2",         "Comment": "MT3620 SK: Connect external reset signal using SOCKET1: RX."},
         {"Name": "SAMPLE_NRF52_DFU",      "Type": "Gpio",      "Mapping": "AVNET_MT3620_SK_GPIO26",        "Comment": "MT3620 SK: Connect external dfu signal using SOCKET1: TX."},
 
 
