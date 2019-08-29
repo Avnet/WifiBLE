@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains a modified version of the Sample code found in the [Azure Sphere Samples repository](https://github.com/Azure/azure-sphere-samples/tree/master/Samples/WifiSetupAndDeviceControlViaBle).  The code in this repository has been ported to the [Avnet Azure Sphere MT3620 Starter Kit]([http://cloudconnectkits.org/product/azure-sphere-starter-kit](http://cloudconnectkits.org/product/azure-sphere-starter-kit)). Although the Avnet Starter Kit contains the same MT3620 processor as the Seed Development Board, the hardware platform itself is different. A summary of these differences are:
+This repository contains a modified version of the Sample code found in the [Azure Sphere Samples repository](https://github.com/Azure/azure-sphere-samples/tree/master/Samples/WifiSetupAndDeviceControlViaBle).  The code has been ported to the [Avnet Azure Sphere MT3620 Starter Kit]([http://cloudconnectkits.org/product/azure-sphere-starter-kit](http://cloudconnectkits.org/product/azure-sphere-starter-kit)). Although the Avnet Starter Kit contains the same MT3620 processor as the Seed Development Board, the hardware platform itself is different. A summary of these differences are:
 
 1. Different number and configuration of LEDs
 
