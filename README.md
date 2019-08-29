@@ -31,6 +31,8 @@ Overall, the sample code operation is the same as described in the [Microsoft Sa
 
 ## Hardware setup
 
+![Connection diagram for nRF52 and MT3620](./media/nRF52_MT3620_connection.png)
+
 Jumpers run from the Avnet Azure Sphere MT3620 Starter Kit to the nRF52 board using a using a MikroElectronika click [PROTO click]([https://www.mikroe.com/proto-click](https://www.mikroe.com/proto-click)).  The Click Board pin used are :
 * GPIO2_PWM2
 * GPI28_MISC0_RX0_DATA0
